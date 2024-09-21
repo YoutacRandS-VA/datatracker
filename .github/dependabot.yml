@@ -6,23 +6,23 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directory: "/datatracker"
     schedule:
-      interval: "weekly"
+      interval: "5 minutes"
   - package-ecosystem: "docker"
     directory: "/docker"
     schedule:
-      interval: "weekly"
+      interval: "5 minutes"
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "5 minutes"
     reviewers:
       - "rjsparks"
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "5 minutes"
     groups:
       yarn:
         patterns:
@@ -30,7 +30,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/playwright"
     schedule:
-      interval: "weekly"
+      interval: "5 minutes"
     groups:
       npm:
         patterns:
@@ -38,7 +38,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/dev/coverage-action"
     schedule:
-      interval: "weekly"
+      interval: "5 minutes"
     groups:
       npm:
         patterns:
@@ -46,7 +46,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/dev/deploy-to-container"
     schedule:
-      interval: "weekly"
+      interval: "5 minutes"
     groups:
       npm:
         patterns:
@@ -54,7 +54,7 @@ updates:
   - package-ecosystem: "npm"
     directory: "/dev/diff"
     schedule:
-      interval: "weekly"
+      interval: "5 minutes"
     groups:
       npm:
         patterns:
