@@ -3,7 +3,7 @@
 
 from textwrap import dedent
 
-from ietf.ipr.mail import process_response_email
+from ietf.ipr.mail import process_response_email, UndeliverableIprResponseError
 from ietf.ipr.models import IprDocRel
 
 import debug                            # pyflakes:ignore
@@ -92,8 +92,14 @@ def generate_draft_recursive_txt():
 def ingest_response_email(message: bytes):
     from ietf.api.views import EmailIngestionError  # avoid circular import
     try:
-        result = process_response_email(message)
+        process_response_email(message)
+    except UndeliverableIprResponseError:
+        # Message was rejected due to some problem the sender can fix, so bounce but don't send
+        # an email to the admins
+        raise EmailIngestionError("IPR response rejected", email_body=None)
     except Exception as err:
+        # Message was rejected due to an unhandled exception. This is likely something
+        # the admins need to address, so send them a copy of the email.
         raise EmailIngestionError(
             "Datatracker IPR email ingestion error",
             email_body=dedent("""\
@@ -104,15 +110,3 @@ def ingest_response_email(message: bytes):
             email_original_message=message,
             email_attach_traceback=True,
         ) from err
-    
-    if result is None:
-        raise EmailIngestionError(
-            "Datatracker IPR email ingestion rejected",
-            email_body=dedent("""\
-            A message was rejected while ingesting IPR email into the Datatracker. The original message is attached.
-
-            {error_summary}
-            """),
-            email_original_message=message,
-            email_attach_traceback=True,
-        )

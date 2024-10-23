@@ -26,11 +26,6 @@ warnings.filterwarnings("ignore", message="The logout\\(\\) view is superseded b
 warnings.filterwarnings("ignore", message="Report.file_reporters will no longer be available in Coverage.py 4.2", module="coverage.report")
 warnings.filterwarnings("ignore", message="Using or importing the ABCs from 'collections' instead of from 'collections.abc' is deprecated", module="bleach")
 warnings.filterwarnings("ignore", message="HTTPResponse.getheader\\(\\) is deprecated", module='selenium.webdriver')
-try:
-    import syslog
-    syslog.openlog(str("datatracker"), syslog.LOG_PID, syslog.LOG_USER)
-except ImportError:
-    pass
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(BASE_DIR + "/.."))
@@ -240,11 +235,11 @@ LOGGING = {
     #
     'loggers': {
         'django': {
-            'handlers': ['debug_console', 'mail_admins'],
+            'handlers': ['console', 'mail_admins'],
             'level': 'INFO',
         },
         'django.request': {
-            'handlers': ['debug_console'],
+            'handlers': ['console'],
             'level': 'ERROR',
         },
         'django.server': {
@@ -252,19 +247,19 @@ LOGGING = {
             'level': 'INFO',
         },
         'django.security': {
-            'handlers': ['debug_console', ],
+            'handlers': ['console', ],
             'level': 'INFO',
         },
         'oidc_provider': {
-            'handlers': ['debug_console', ],
+            'handlers': ['console', ],
             'level': 'DEBUG',
         },
         'datatracker': {
-            'handlers': ['debug_console'],
+            'handlers': ['console'],
             'level': 'INFO',
         },
         'celery': {
-            'handlers': ['debug_console'],
+            'handlers': ['console'],
             'level': 'INFO',
         },
     },
@@ -275,7 +270,7 @@ LOGGING = {
         'console': {
             'level': 'DEBUG',
             'class': 'logging.StreamHandler',
-            'formatter': 'json',
+            'formatter': 'plain',
         },
         'debug_console': {
             # Active only when DEBUG=True
@@ -331,7 +326,9 @@ LOGGING = {
             'format': '{levelname}: {name}:{lineno}: {message}',
         },
         'json' : {
-            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter'
+            "class": "ietf.utils.jsonlogger.DatatrackerJsonFormatter",
+            "style": "{",
+            "format": "{asctime}{levelname}{message}{name}{pathname}{lineno}{funcName}{process}",
         }
     },
 }
@@ -404,24 +401,25 @@ if DEBUG:
 
 
 MIDDLEWARE = [
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'corsheaders.middleware.CorsMiddleware', # see docs on CORS_REPLACE_HTTPS_REFERER before using it
-    'django.middleware.common.CommonMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.http.ConditionalGetMiddleware',
-    'simple_history.middleware.HistoryRequestMiddleware',
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "corsheaders.middleware.CorsMiddleware", # see docs on CORS_REPLACE_HTTPS_REFERER before using it
+    "django.middleware.common.CommonMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.http.ConditionalGetMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",
     # comment in this to get logging of SQL insert and update statements:
-    #'ietf.middleware.sql_log_middleware',
-    'ietf.middleware.SMTPExceptionMiddleware',
-    'ietf.middleware.Utf8ExceptionMiddleware',
-    'ietf.middleware.redirect_trailing_period_middleware',
-    'django_referrer_policy.middleware.ReferrerPolicyMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django.middleware.security.SecurityMiddleware',
- #   'csp.middleware.CSPMiddleware',
-    'ietf.middleware.unicode_nfkc_normalization_middleware',
+    #"ietf.middleware.sql_log_middleware",
+    "ietf.middleware.SMTPExceptionMiddleware",
+    "ietf.middleware.Utf8ExceptionMiddleware",
+    "ietf.middleware.redirect_trailing_period_middleware",
+    "django_referrer_policy.middleware.ReferrerPolicyMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    #"csp.middleware.CSPMiddleware",
+    "ietf.middleware.unicode_nfkc_normalization_middleware",
+    "ietf.middleware.is_authenticated_header_middleware",
 ]
 
 ROOT_URLCONF = 'ietf.urls'
@@ -439,7 +437,7 @@ STATICFILES_DIRS = (
 
 INSTALLED_APPS = [
     # Django apps
-    'django.contrib.admin',
+    'ietf.admin',  # replaces django.contrib.admin
     'django.contrib.admindocs',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -482,6 +480,7 @@ INSTALLED_APPS = [
     'ietf.release',
     'ietf.review',
     'ietf.stats',
+    'ietf.status',
     'ietf.submit',
     'ietf.sync',
     'ietf.utils',
@@ -671,6 +670,7 @@ INTERNET_DRAFT_PDF_PATH = '/a/www/ietf-datatracker/pdf/'
 RFC_PATH = '/a/www/ietf-ftp/rfc/'
 CHARTER_PATH = '/a/ietfdata/doc/charter/'
 CHARTER_COPY_PATH = '/a/www/ietf-ftp/ietf'  # copy 1wg-charters files here if set
+GROUP_SUMMARY_PATH = '/a/www/ietf-ftp/ietf'
 BOFREQ_PATH = '/a/ietfdata/doc/bofreq/'
 CONFLICT_REVIEW_PATH = '/a/ietfdata/doc/conflict-review'
 STATUS_CHANGE_PATH = '/a/ietfdata/doc/status-change'
@@ -819,8 +819,6 @@ IDSUBMIT_MAX_VALIDATION_TIME = datetime.timedelta(minutes=20)
 
 # Age at which a submission expires if not posted
 IDSUBMIT_EXPIRATION_AGE = datetime.timedelta(days=14)
-
-IDSUBMIT_MANUAL_STAGING_DIR = '/tmp/'
 
 IDSUBMIT_FILE_TYPES = (
     'txt',
@@ -980,8 +978,6 @@ DE_GFM_BINARY = '/usr/bin/de-gfm.ruby2.5'
 # Account settings
 DAYS_TO_EXPIRE_REGISTRATION_LINK = 3
 MINUTES_TO_EXPIRE_RESET_PASSWORD_LINK = 60
-HTPASSWD_COMMAND = "/usr/bin/htpasswd"
-HTPASSWD_FILE = "/a/www/htpasswd"
 
 # Generation of pdf files
 GHOSTSCRIPT_COMMAND = "/usr/bin/gs"
@@ -1064,14 +1060,6 @@ GROUP_ALIAS_DOMAIN = IETF_DOMAIN
 
 TEST_DATA_DIR = os.path.abspath(BASE_DIR + "/../test/data")
 
-# Path to the email alias lists.  Used by ietf.utils.aliases
-DRAFT_ALIASES_PATH = os.path.join(TEST_DATA_DIR, "draft-aliases")
-DRAFT_VIRTUAL_PATH = os.path.join(TEST_DATA_DIR, "draft-virtual")
-DRAFT_VIRTUAL_DOMAIN = "virtual.ietf.org"
-
-GROUP_ALIASES_PATH = os.path.join(TEST_DATA_DIR, "group-aliases")
-GROUP_VIRTUAL_PATH = os.path.join(TEST_DATA_DIR, "group-virtual")
-GROUP_VIRTUAL_DOMAIN = "virtual.ietf.org"
 
 POSTCONFIRM_PATH   = "/a/postconfirm/wrapper"
 
@@ -1187,7 +1175,7 @@ CELERY_TASK_IGNORE_RESULT = True  # ignore results unless specifically enabled f
 MEETECHO_ONSITE_TOOL_URL = "https://meetings.conf.meetecho.com/onsite{session.meeting.number}/?session={session.pk}"
 MEETECHO_VIDEO_STREAM_URL = "https://meetings.conf.meetecho.com/ietf{session.meeting.number}/?session={session.pk}"
 MEETECHO_AUDIO_STREAM_URL = "https://mp3.conf.meetecho.com/ietf{session.meeting.number}/{session.pk}.m3u"
-MEETECHO_SESSION_RECORDING_URL = "https://www.meetecho.com/ietf{session.meeting.number}/recordings#{session.group.acronym_upper}"
+MEETECHO_SESSION_RECORDING_URL = "https://meetecho-player.ietf.org/playout/?session={session_label}"
 
 # Put the production SECRET_KEY in settings_local.py, and also any other
 # sensitive or site-specific changes.  DO NOT commit settings_local.py to svn.

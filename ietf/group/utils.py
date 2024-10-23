@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import datetime
 
+from itertools import chain
 from pathlib import Path
 
 from django.db.models import Q
@@ -153,17 +154,23 @@ def can_manage_materials(user, group):
 def can_manage_session_materials(user, group, session):
     return has_role(user, 'Secretariat') or (group.has_role(user, group.features.matman_roles) and not session.is_material_submission_cutoff())
 
-# Maybe this should be cached...
 def can_manage_some_groups(user):
     if not user.is_authenticated:
         return False
+    authroles = set(
+        chain.from_iterable(
+            GroupFeatures.objects.values_list("groupman_authroles", flat=True)
+        )
+    )
+    extra_role_qs = dict()
     for gf in GroupFeatures.objects.all():
-        for authrole in gf.groupman_authroles:
-            if has_role(user, authrole):
-                return True
-            if Role.objects.filter(name__in=gf.groupman_roles, group__type_id=gf.type_id, person__user=user).exists():
-                return True
-    return False          
+        extra_role_qs[f"{gf.type_id} groupman roles"] = Q(
+            name__in=gf.groupman_roles,
+            group__type_id=gf.type_id,
+            group__state__in=["active", "bof", "proposed"],
+        )
+    return has_role(user, authroles, extra_role_qs=extra_role_qs)
+       
 
 def can_provide_status_update(user, group):
     if not group.features.acts_like_wg:
@@ -373,6 +380,12 @@ class GroupAliasGenerator:
     ]  # This should become groupfeature driven...
     no_ad_group_types = ["rg", "rag", "team", "program", "rfcedtyp", "edappr", "edwg"]
 
+    def __init__(self, group_queryset=None):
+        if group_queryset is None:
+            self.group_queryset = Group.objects.all()
+        else:
+            self.group_queryset = group_queryset
+
     def __iter__(self):
         show_since = timezone.now() - datetime.timedelta(days=self.days)
 
@@ -384,7 +397,7 @@ class GroupAliasGenerator:
             if g == "program":
                 domains.append("iab")
 
-            entries = Group.objects.filter(type=g).all()
+            entries = self.group_queryset.filter(type=g).all()
             active_entries = entries.filter(state__in=self.active_states)
             inactive_recent_entries = entries.exclude(
                 state__in=self.active_states
@@ -405,7 +418,7 @@ class GroupAliasGenerator:
                     yield name + "-chairs", domains, list(chair_emails)
 
         # The area lists include every chair in active working groups in the area
-        areas = Group.objects.filter(type="area").all()
+        areas = self.group_queryset.filter(type="area").all()
         active_areas = areas.filter(state__in=self.active_states)
         for area in active_areas:
             name = area.acronym
@@ -418,13 +431,31 @@ class GroupAliasGenerator:
 
         # Other groups with chairs that require Internet-Draft submission approval
         gtypes = GroupTypeName.objects.values_list("slug", flat=True)
-        special_groups = Group.objects.filter(
+        special_groups = self.group_queryset.filter(
             type__features__req_subm_approval=True, acronym__in=gtypes, state="active"
         )
         for group in special_groups:
             chair_emails = get_group_role_emails(group, ["chair", "delegate"])
             if chair_emails:
                 yield group.acronym + "-chairs", ["ietf"], list(chair_emails)
+
+
+def get_group_email_aliases(acronym, group_type):
+    aliases = []
+    group_queryset = Group.objects.all()
+    if acronym:
+        group_queryset = group_queryset.filter(acronym=acronym)
+    if group_type:
+        group_queryset = group_queryset.filter(type__slug=group_type)
+    for (alias, _, alist) in GroupAliasGenerator(group_queryset):
+        acro, _hyphen, alias_type = alias.partition("-")
+        expansion = ", ".join(sorted(alist))
+        aliases.append({
+            "acronym": acro,
+            "alias_type": f"-{alias_type}" if alias_type else "",
+            "expansion": expansion,
+        })
+    return sorted(aliases, key=lambda a: a["acronym"])
 
 
 def role_holder_emails():
