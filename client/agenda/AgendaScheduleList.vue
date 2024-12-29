@@ -83,6 +83,14 @@
                 template(#trigger)
                   span.badge.is-bof BoF
                 span #[a(href='https://www.ietf.org/how/bofs/', target='_blank') Birds of a Feather] sessions (BoFs) are initial discussions about a particular topic of interest to the IETF community.
+              n-popover(
+                v-if='item.isProposed'
+                trigger='hover'
+                :width='250'
+                )
+                template(#trigger)
+                  span.badge.is-proposed Proposed
+                span #[a(href='https://www.ietf.org/process/wgs/', target='_blank') Proposed WGs] are groups in the process of being chartered. If the charter is not approved by the IESG before the IETF meeting, the session may be canceled.
               .agenda-table-note(v-if='item.note')
                 i.bi.bi-arrow-return-right.me-1
                 span {{item.note}}
@@ -276,6 +284,7 @@ const meetingEvents = computed(() => {
     const purposesWithoutLinks = ['admin', 'closed_meeting', 'officehours', 'social']
     if (item.flags.showAgenda || (typesWithLinks.includes(item.type) && !purposesWithoutLinks.includes(item.purpose))) {
       if (item.flags.agenda) {
+        // -> Meeting Materials
         links.push({
           id: `lnk-${item.id}-tar`,
           label: 'Download meeting materials as .tar archive',
@@ -297,7 +306,18 @@ const meetingEvents = computed(() => {
           color: 'red'
         })
       }
-      if (agendaStore.usesNotes) {
+      // -> Point to Wiki for Hackathon sessions, HedgeDocs otherwise
+      if (item.name.toLowerCase().includes('hackathon')) {
+        links.push({
+          id: `lnk-${item.id}-wiki`,
+          label: 'Wiki',
+          icon: 'book',
+          href: getUrl('hackathonWiki', {
+            meetingNumber: agendaStore.meeting.number
+          }),
+          color: 'blue'
+        })
+      } else if (agendaStore.usesNotes) {
         links.push({
           id: `lnk-${item.id}-note`,
           label: 'Notepad for note-takers',
@@ -468,6 +488,7 @@ const meetingEvents = computed(() => {
       // groupParentName: item.groupParent?.name,
       icon,
       isBoF: item.isBoF,
+      isProposed: item.isProposed,
       isSessionEvent: item.type === 'regular',
       links,
       location: item.location,
@@ -1012,9 +1033,24 @@ onBeforeUnmount(() => {
         word-wrap: break-word;
       }
 
-      .badge.is-bof {
-        background-color: $teal-500;
+      .badge {
         margin: 0 8px;
+
+        &.is-bof {
+          background-color: $teal-500;
+
+          @at-root .theme-dark & {
+            background-color: $teal-700;
+          }
+        }
+
+        &.is-proposed {
+          background-color: $gray-500;
+
+          @at-root .theme-dark & {
+            background-color: $gray-700;
+          }
+        }
 
         @media screen and (max-width: $bs5-break-md) {
           width: 30px;
